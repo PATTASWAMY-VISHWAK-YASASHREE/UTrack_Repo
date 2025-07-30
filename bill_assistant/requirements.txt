@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+httpx
+firebase-admin==6.2.0
+python-multipart
+pydantic>=2.0.0,<3.0.0
+python-dotenv

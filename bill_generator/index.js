@@ -4,12 +4,20 @@ const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
+const { apiKeyManager } = require('../shared/api-config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.API);
+// Initialize Gemini AI with fallback handling
+let genAI = null;
+try {
+  const defaultApiKey = apiKeyManager.getApiKey();
+  genAI = new GoogleGenerativeAI(defaultApiKey);
+  console.log('✅ Gemini AI initialized with default API key');
+} catch (error) {
+  console.warn('⚠️  No default API key available. Will use per-request API keys.');
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -56,7 +64,40 @@ app.use((req, res, next) => {
   }
 });
 
-// Helper function to convert file to base64
+// Helper function to get API key from request
+function getApiKeyFromRequest(req) {
+  // Check headers for API key
+  const headerApiKey = req.get('x-api-key') || 
+                      req.get('authorization')?.replace('Bearer ', '') ||
+                      req.get('gemini-api-key');
+  
+  if (headerApiKey && apiKeyManager.validateApiKey(headerApiKey)) {
+    return headerApiKey;
+  }
+  
+  // Try to get user-specific API key
+  const userId = req.get('x-user-id') || req.get('user-id');
+  if (userId) {
+    try {
+      return apiKeyManager.getApiKey(userId);
+    } catch (error) {
+      console.warn(`No API key found for user ${userId}, trying default`);
+    }
+  }
+  
+  // Fall back to default
+  return apiKeyManager.getApiKey();
+}
+
+// Helper function to get Gemini client for request
+function getGeminiClient(req) {
+  try {
+    const apiKey = getApiKeyFromRequest(req);
+    return new GoogleGenerativeAI(apiKey);
+  } catch (error) {
+    throw new Error(`No valid API key available: ${error.message}`);
+  }
+}
 function fileToGenerativePart(path, mimeType) {
   return {
     inlineData: {
@@ -137,6 +178,65 @@ function generateHTMLTable(billData) {
   return html;
 }
 
+// API key management endpoints
+app.post('/api/test-key', async (req, res) => {
+  try {
+    const apiKey = req.body.apiKey || getApiKeyFromRequest(req);
+    
+    if (!apiKey) {
+      return res.status(400).json({
+        error: 'No API key provided',
+        message: 'Please provide API key in request body or headers'
+      });
+    }
+
+    const result = await apiKeyManager.testApiKey(apiKey);
+    res.json({
+      success: result.valid,
+      message: result.message,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Test failed',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/set-user-key', (req, res) => {
+  try {
+    const { userId, apiKey } = req.body;
+    
+    if (!userId || !apiKey) {
+      return res.status(400).json({
+        error: 'Missing parameters',
+        message: 'Both userId and apiKey are required'
+      });
+    }
+
+    apiKeyManager.setUserKey(userId, apiKey);
+    res.json({
+      success: true,
+      message: `API key set for user ${userId}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: 'Invalid API key',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/key-status', (req, res) => {
+  const status = apiKeyManager.getStatus();
+  res.json({
+    ...status,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -169,13 +269,23 @@ app.post('/process-bill', upload.single('bill_image'), async (req, res) => {
       });
     }
 
-    
+    // Get Gemini client for this request
+    let currentGenAI;
+    try {
+      currentGenAI = getGeminiClient(req);
+    } catch (error) {
+      return res.status(401).json({
+        error: 'API key error',
+        message: error.message,
+        hint: 'Please provide a valid API key via x-api-key header or configure environment variables'
+      });
+    }
 
     const imagePath = req.file.path;
     const mimeType = req.file.mimetype;
 
     // Get the generative model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = currentGenAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Prepare the prompt for bill analysis
     const prompt = `

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -12,6 +12,12 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from functools import lru_cache
 from dotenv import load_dotenv
+
+# Import shared API key management
+import sys
+sys.path.append('/home/runner/work/UTrack_Repo/UTrack_Repo/shared')
+from api_config import api_key_manager, get_api_key_for_request, APIKeyMiddleware
+
 load_dotenv()
 # Initialize FastAPI app
 app = FastAPI(title="Financial Assistant API", version="1.0.0")
@@ -127,13 +133,21 @@ async def fetch_user_data_async(uid: str) -> Dict[str, Any]:
         print(f"❌ Error type: {type(e).__name__}")
         raise HTTPException(status_code=500, detail=f"Error fetching user data: {str(e)}")
 
-async def call_gemini_async(prompt: str) -> str:
-    """Async function to call Gemini API with optimizations"""
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    print("api key:", gemini_api_key)
-    print("api_key:", gemini_api_key)
+async def call_gemini_async(prompt: str, headers: Dict[str, str] = None, user_id: str = None) -> str:
+    """Async function to call Gemini API with optimizations and dynamic API key handling"""
+    
+    # Get API key for this request
+    try:
+        if headers is None:
+            headers = {}
+        gemini_api_key = get_api_key_for_request(headers, user_id)
+    except Exception as e:
+        print(f"❌ API key error: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"API key error: {str(e)}")
+    
+    print("api key:", gemini_api_key[:10] + "..." if gemini_api_key else "None")
     if not gemini_api_key:
-        raise HTTPException(status_code=500, detail="Gemini API key not configured")
+        raise HTTPException(status_code=401, detail="No valid API key available")
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
     
@@ -299,11 +313,12 @@ def process_user_bills(user_bills: list) -> str:
     return result
 
 @app.post("/test-gemini")
-async def test_gemini():
-    """Test endpoint to check if Gemini API is working"""
+async def test_gemini(http_request: Request):
+    """Test endpoint to check if Gemini API is working with dynamic API key"""
     try:
+        headers = dict(http_request.headers)
         simple_prompt = "Hello, please respond with 'API is working' if you can see this message."
-        response = await call_gemini_async(simple_prompt)
+        response = await call_gemini_async(simple_prompt, headers)
         return {
             "success": True,
             "response": response,
@@ -316,9 +331,53 @@ async def test_gemini():
             "message": "Gemini API test failed"
         }
 
+@app.post("/api/test-key")
+async def test_api_key(request: dict, http_request: Request):
+    """Test API key endpoint"""
+    try:
+        headers = dict(http_request.headers)
+        api_key = request.get('apiKey') or get_api_key_for_request(headers)
+        
+        if not api_key:
+            raise HTTPException(status_code=400, detail="No API key provided")
+        
+        result = await api_key_manager.test_api_key(api_key)
+        return {
+            "success": result["valid"],
+            "message": result["message"],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+
+@app.post("/api/set-user-key")
+async def set_user_key(request: dict):
+    """Set API key for a specific user"""
+    try:
+        user_id = request.get('userId')
+        api_key = request.get('apiKey')
+        
+        if not user_id or not api_key:
+            raise HTTPException(status_code=400, detail="Both userId and apiKey are required")
+        
+        api_key_manager.set_user_key(user_id, api_key)
+        return {
+            "success": True,
+            "message": f"API key set for user {user_id}",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid API key: {str(e)}")
+
+@app.get("/api/key-status")
+async def get_key_status():
+    """Get API key configuration status"""
+    status = api_key_manager.get_status()
+    return status
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
-    """Optimized chat endpoint with parallel processing"""
+async def chat_endpoint(request: ChatRequest, http_request: Request):
+    """Optimized chat endpoint with parallel processing and dynamic API key handling"""
     start_time = asyncio.get_event_loop().time()
     
     try:
@@ -332,6 +391,9 @@ async def chat_endpoint(request: ChatRequest):
         # Check if database is available
         if not db:
             raise HTTPException(status_code=500, detail="Database not initialized. Check Firebase configuration.")
+        
+        # Extract headers for API key management
+        headers = dict(http_request.headers)
         
         print("📊 Fetching user data from Firebase...")
         # Fetch user data asynchronously
@@ -361,9 +423,9 @@ async def chat_endpoint(request: ChatRequest):
         )
         print(f"📝 Created prompt with {len(prompt)} characters")
         
-        # Call Gemini API asynchronously
+        # Call Gemini API asynchronously with request headers and user ID
         print("🤖 Calling Gemini API...")
-        ai_response = await call_gemini_async(prompt)
+        ai_response = await call_gemini_async(prompt, headers, request.uid)
         print(f"✅ Received Gemini response: {len(ai_response)} characters")
         
         # Calculate processing time

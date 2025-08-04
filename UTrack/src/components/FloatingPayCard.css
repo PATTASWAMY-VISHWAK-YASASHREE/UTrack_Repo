@@ -1,0 +1,284 @@
+/* Fixed Floating Pay Card with 3D Tilt Effect */
+
+.floating-pay-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  height: auto;
+  z-index: 1000;
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease-out;
+  animation: floatIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards,
+             floatingShadow 4s ease-in-out infinite;
+}
+
+.floating-pay-card__content {
+  position: relative;
+  background: linear-gradient(135deg, 
+    rgba(26, 26, 26, 0.95) 0%, 
+    rgba(45, 45, 45, 0.95) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px 28px;
+  backdrop-filter: blur(20px);
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.4),
+    0 12px 25px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 2px 4px rgba(255, 255, 255, 0.1) inset;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Header styles */
+.floating-pay-card__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 300;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.floating-pay-card__close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: scale(1.1);
+}
+
+.floating-pay-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.floating-pay-card__main-title {
+  text-align: center;
+}
+
+.floating-pay-card__main-title h2 {
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #ffffff, #007AFF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.floating-pay-card__main-title p {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* Body styles */
+.floating-pay-card__body {
+  margin-top: 20px;
+}
+
+.floating-pay-card__razorpay {
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.floating-pay-card__razorpay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1), 
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* Razorpay form styles */
+.floating-pay-card__razorpay form {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Loading state */
+.razorpay-loading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  font-weight: 500;
+  width: 100%;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #007AFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Fallback button styles */
+.razorpay-fallback-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #007AFF, #00D4FF);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+}
+
+.razorpay-fallback-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.4);
+}
+
+/* Razorpay button override styles */
+.floating-pay-card__razorpay .razorpay-payment-button {
+  width: 100% !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #007AFF, #00D4FF) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 12px 20px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3) !important;
+  font-size: 16px !important;
+}
+
+.floating-pay-card__razorpay .razorpay-payment-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.4) !important;
+}
+
+/* Animations */
+@keyframes floatIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes floatingShadow {
+  0%, 100% {
+    box-shadow: 
+      0 25px 50px rgba(0, 0, 0, 0.4),
+      0 12px 25px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+      0 2px 4px rgba(255, 255, 255, 0.1) inset;
+  }
+  50% {
+    box-shadow: 
+      0 35px 70px rgba(0, 0, 0, 0.5),
+      0 15px 35px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+      0 2px 4px rgba(255, 255, 255, 0.1) inset;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .floating-pay-card {
+    width: 320px;
+  }
+  
+  .floating-pay-card__content {
+    padding: 24px 20px;
+  }
+  
+  .floating-pay-card__main-title h2 {
+    font-size: 24px;
+  }
+  
+  .floating-pay-card__main-title p {
+    font-size: 14px;
+  }
+}
+
+@media (max-height: 600px) {
+  .floating-pay-card {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  
+  .floating-pay-card__main-title h2 {
+    font-size: 22px;
+  }
+}
+
+/* Hover effects for better interaction */
+.floating-pay-card:hover .floating-pay-card__content {
+  box-shadow: 
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    0 15px 30px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 2px 4px rgba(255, 255, 255, 0.15) inset;
+}
+
+.floating-pay-card:hover .floating-pay-card__icon {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 122, 255, 0.4);
+}

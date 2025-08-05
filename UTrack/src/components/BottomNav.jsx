@@ -1,6 +1,6 @@
 // src/components/BottomNav.jsx
 import { Link, useLocation } from "react-router-dom";
-import { FaHome, FaBell, FaUser,FaUniversity } from "react-icons/fa";
+import { FaHome, FaBell, FaUser, FaHistory } from "react-icons/fa";
 import { MdOutlineStars } from "react-icons/md";
 import { FaQrcode } from "react-icons/fa";
 import "./BottomNav.css";
@@ -11,7 +11,7 @@ const BottomNav = () => {
     { name: "Home", icon: <FaHome />, path: "/dashboard" },
     { name: "Ask", icon: <MdOutlineStars />, path: "/chat" },
     { name: "Scan", icon: <FaQrcode />, path: "/scan", center: true },
-    { name: "Alerts", icon: <FaUniversity />, path: "/alerts" },
+    { name: "History", icon: <FaHistory />, path: "/transactions" },
     { name: "You", icon: <FaUser />, path: "/profile" },
   ];
 

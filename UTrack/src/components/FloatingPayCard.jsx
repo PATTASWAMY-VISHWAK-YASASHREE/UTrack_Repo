@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { auth, db } from '../firebase';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import './FloatingPayCard.css';
 
 const FloatingPayCard = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [transform, setTransform] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('idle');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userdata, setUserData] = useState(null);
   const cardRef = useRef(null);
   const razorpayContainerRef = useRef(null);
 
@@ -14,6 +20,26 @@ const FloatingPayCard = () => {
     }, 2000);
 
     return () => clearTimeout(timer);
+  }, []);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Listen for real-time user data updates
+        const userRef = doc(db, 'users', user.uid);
+        const unsubscribeDoc = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            setUserData(doc.data());
+          }
+        });
+        
+        return unsubscribeDoc;
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // Handle mouse move for 3D tilt effect
@@ -49,9 +75,84 @@ const FloatingPayCard = () => {
     setTransform('translate(-50%, -50%) perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)');
   };
 
-  // Initialize Razorpay script
+  // Handle payment success callback
+  const handlePaymentSuccess = useCallback(async (response) => {
+    console.log('Payment successful:', response);
+    setPaymentStatus('success');
+    
+    try {
+      if (currentUser) {
+        // Create a local transaction record immediately for instant UI update
+        const localTransaction = {
+          paymentId: response.razorpay_payment_id,
+          amount: 100, // This should match your actual payment amount
+          currency: 'INR',
+          status: 'captured',
+          method: 'razorpay',
+          createdAt: new Date(),
+          description: `UTrack Payment - User: ${currentUser.uid}`,
+          type: 'razorpay_payment',
+          timestamp: new Date(),
+          processedAt: new Date(),
+          source: 'frontend_success'
+        };
+
+        // Update user document immediately
+        const userRef = doc(db, 'users', currentUser.uid);
+        const currentTransactions = userdata?.user_transactions || [];
+        const currentSpendings = userdata?.userspendings || {};
+        const budget = userdata?.usersettings?.montly_budget || 0;
+
+        // Calculate updated spendings
+        const newAmount = localTransaction.amount;
+        const updatedSpendings = {
+          today: {
+            spent: (currentSpendings.today?.spent || 0) + newAmount,
+            budget: Math.round(budget / 30)
+          },
+          this_week: {
+            spent: (currentSpendings.this_week?.spent || 0) + newAmount,
+            budget: Math.round(budget / 4)
+          },
+          this_month: {
+            spent: (currentSpendings.this_month?.spent || 0) + newAmount,
+            budget: budget
+          },
+          overall: {
+            spent: (currentSpendings.overall?.spent || 0) + newAmount,
+            budget: budget
+          }
+        };
+
+        await updateDoc(userRef, {
+          user_transactions: [...currentTransactions, localTransaction],
+          userspendings: updatedSpendings,
+          lastTransactionAt: new Date()
+        });
+
+        console.log('✅ Local transaction data updated immediately');
+        
+        // Show success message
+        setTimeout(() => {
+          alert('Payment successful! Your transaction has been recorded.');
+          setIsVisible(false);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error updating local transaction:', error);
+    }
+  }, [currentUser, userdata]);
+
+  // Handle payment failure
+  const handlePaymentFailure = (response) => {
+    console.error('Payment failed:', response);
+    setPaymentStatus('failed');
+    alert('Payment failed. Please try again.');
+  };
+
+  // Initialize Razorpay script with enhanced integration
   useEffect(() => {
-    if (!razorpayContainerRef.current) return;
+    if (!razorpayContainerRef.current || !currentUser) return;
 
     // Clear the container first
     razorpayContainerRef.current.innerHTML = '';
@@ -70,63 +171,93 @@ const FloatingPayCard = () => {
     // Add form to container
     razorpayContainerRef.current.appendChild(form);
 
-    // Create script element
-    const script = document.createElement('script');
-    script.src = "https://checkout.razorpay.com/v1/payment-button.js";
-    script.setAttribute("data-payment_button_id", "pl_Qz9w79lQBguY8Q");
-    script.async = true;
+    // Enhanced Razorpay integration with proper callback handling
+    const initializeRazorpay = () => {
+      // Option 1: Use Razorpay Checkout (recommended for better control)
+      const razorpayButton = document.createElement('button');
+      razorpayButton.type = 'button';
+      razorpayButton.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+          <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        Pay with Razorpay
+      `;
+      razorpayButton.className = 'razorpay-fallback-btn enhanced-razorpay-btn';
+      
+      razorpayButton.onclick = () => {
+        const options = {
+          key: 'rzp_test_your_key_here', // Replace with your actual key
+          amount: 10000, // Amount in paise (₹100)
+          currency: 'INR',
+          name: 'UTrack',
+          description: `Payment for UTrack services - User: ${currentUser.uid}`,
+          image: '/logo.png', // Your app logo
+          handler: handlePaymentSuccess,
+          prefill: {
+            name: currentUser.displayName || 'User',
+            email: currentUser.email,
+            contact: userdata?.phoneNumber || ''
+          },
+          notes: {
+            userId: currentUser.uid,
+            userEmail: currentUser.email,
+            timestamp: new Date().toISOString()
+          },
+          theme: {
+            color: '#007AFF'
+          },
+          modal: {
+            ondismiss: () => {
+              console.log('Payment modal dismissed');
+              setPaymentStatus('dismissed');
+            }
+          }
+        };
 
-    let hasLoaded = false;
+        if (window.Razorpay) {
+          const rzp = new window.Razorpay(options);
+          rzp.on('payment.failed', handlePaymentFailure);
+          rzp.open();
+        } else {
+          console.error('Razorpay not loaded');
+          alert('Payment service not available. Please try again later.');
+        }
+      };
 
-    // Add event listeners
-    script.onload = () => {
-      console.log('Razorpay script loaded successfully');
-      hasLoaded = true;
-      // Remove loading state - let Razorpay replace it
+      form.innerHTML = '';
+      form.appendChild(razorpayButton);
     };
 
-    script.onerror = () => {
-      console.error('Failed to load Razorpay script');
-      if (!hasLoaded) {
-        // Replace with fallback button only if script failed to load
+    // Load Razorpay script
+    if (!window.Razorpay) {
+      const script = document.createElement('script');
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = initializeRazorpay;
+      script.onerror = () => {
+        console.error('Failed to load Razorpay script');
         form.innerHTML = `
-          <button type="button" class="razorpay-fallback-btn" onclick="alert('Razorpay integration would work here with valid credentials')">
+          <button type="button" class="razorpay-fallback-btn" onclick="alert('Payment service temporarily unavailable')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
               <line x1="1" y1="10" x2="23" y2="10"/>
             </svg>
-            Pay with Razorpay
+            Payment Unavailable
           </button>
         `;
-      }
-    };
-
-    // Append script to form AFTER setting up loading state
-    form.appendChild(script);
-
-    // Extended fallback timeout - only trigger if script hasn't loaded
-    const fallbackTimeout = setTimeout(() => {
-      if (!hasLoaded && form.querySelector('.razorpay-loading')) {
-        console.log('Razorpay script timeout, showing fallback');
-        form.innerHTML = `
-          <button type="button" class="razorpay-fallback-btn" onclick="alert('Click to integrate with your Razorpay account')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-              <line x1="1" y1="10" x2="23" y2="10"/>
-            </svg>
-            Pay with Razorpay
-          </button>
-        `;
-      }
-    }, 10000); // Increased timeout to 10 seconds
+      };
+      document.head.appendChild(script);
+    } else {
+      initializeRazorpay();
+    }
 
     return () => {
-      clearTimeout(fallbackTimeout);
       if (razorpayContainerRef.current) {
         razorpayContainerRef.current.innerHTML = '';
       }
     };
-  }, [isVisible]);
+  }, [isVisible, currentUser, userdata, handlePaymentSuccess]);
 
   const handleClose = () => {
     setIsVisible(false);
@@ -157,12 +288,24 @@ const FloatingPayCard = () => {
         <div className="floating-pay-card__header">
           <div className="floating-pay-card__main-title">
             <h2>Pay with UTrack</h2>
-            <p>Secure payment powered by Razorpay</p>
+            <p>
+              {paymentStatus === 'success' ? '✅ Payment Successful!' :
+               paymentStatus === 'failed' ? '❌ Payment Failed' :
+               'Secure payment powered by Razorpay'}
+            </p>
           </div>
         </div>
         
         <div className="floating-pay-card__body">
           <div ref={razorpayContainerRef} className="floating-pay-card__razorpay"></div>
+          
+          {currentUser && (
+            <div className="payment-info">
+              <p className="text-sm text-gray-400 text-center mt-3">
+                Logged in as: {currentUser.email}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

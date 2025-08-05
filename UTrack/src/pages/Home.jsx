@@ -196,8 +196,6 @@ const ChatItem = ({ is_chat, title, description }) => {
 
 const Home = () => {
   const [userData, setUserData] = useState(null);
-  const [userBills, setUserBills] = useState(null);
-  const [htmlData, setHtmlData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modalHtml, setModalHtml] = useState(null);
   const [chats, setChats] = useState(false);
@@ -323,7 +321,58 @@ const Home = () => {
   }
 
   const { total, today, week, month } = calculateSpendingByTime(userBill || []);
-  console.log({ total, today, week, month });
+  
+  // Add Razorpay transactions to spending calculations
+  const razorpayTransactions = userData?.user_transactions || [];
+  const razorpaySpending = calculateRazorpaySpending(razorpayTransactions);
+  
+  // Combined spending totals
+  const combinedSpending = {
+    total: total + razorpaySpending.total,
+    today: today + razorpaySpending.today,
+    week: week + razorpaySpending.week,
+    month: month + razorpaySpending.month
+  };
+  
+  console.log('Bills spending:', { total, today, week, month });
+  console.log('Razorpay spending:', razorpaySpending);
+  console.log('Combined spending:', combinedSpending);
+
+  function calculateRazorpaySpending(transactions) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let total = 0, today = 0, week = 0, month = 0;
+
+    transactions.forEach(transaction => {
+      const amount = parseFloat(transaction.amount) || 0;
+      const transactionDate = new Date(transaction.createdAt);
+
+      if (isNaN(transactionDate)) return;
+
+      total += amount;
+
+      // Today
+      if (transactionDate >= todayStart && transactionDate <= now) {
+        today += amount;
+      }
+
+      // This week
+      if (transactionDate >= weekStart && transactionDate <= now) {
+        week += amount;
+      }
+
+      // This month
+      if (transactionDate >= monthStart && transactionDate <= now) {
+        month += amount;
+      }
+    });
+
+    return { total, today, week, month };
+  }
 
   function calculateTotalSpending(userbill) {
     return userbill.reduce((sum, bill) => {
@@ -350,17 +399,17 @@ const Home = () => {
   }
 
   const data = {
-    This_Month: { spent: month, budget: budget, percentage: parseInt((month / budget) * 100) },
-    This_week: { spent: week, budget: parseInt((budget) / 4), percentage: parseInt((week / 4) / (budget / 4) * 100) },
-    Today: { spent: today, budget: parseInt((budget) / 30), percentage: parseInt((today / 30) / (budget / 30) * 100) },
-    overall: { spent: total, budget: budget, percentage: parseInt((total / budget) * 100) }
+    This_Month: { spent: combinedSpending.month, budget: budget, percentage: Math.round((combinedSpending.month / budget) * 100) },
+    This_week: { spent: combinedSpending.week, budget: Math.round(budget / 4), percentage: Math.round((combinedSpending.week / (budget / 4)) * 100) },
+    Today: { spent: combinedSpending.today, budget: Math.round(budget / 30), percentage: Math.round((combinedSpending.today / (budget / 30)) * 100) },
+    overall: { spent: combinedSpending.total, budget: budget, percentage: Math.round((combinedSpending.total / budget) * 100) }
   };
 
   const userSpendings = {
-    today: { spent: today, budget: parseInt((budget) / 30) },
-    this_week: { spent: week, budget: parseInt((budget) / 4) },
-    this_month: { spent: month, budget: budget },
-    overall: { spent: total, budget: budget }
+    today: { spent: combinedSpending.today, budget: Math.round(budget / 30) },
+    this_week: { spent: combinedSpending.week, budget: Math.round(budget / 4) },
+    this_month: { spent: combinedSpending.month, budget: budget },
+    overall: { spent: combinedSpending.total, budget: budget }
   }
 
   const updateUserSpendings = async () => {
@@ -392,12 +441,15 @@ const Home = () => {
     }
   };
 
-  // Call updateUserSpendings when data is ready
+  // Call updateUserSpendings when data is ready (including Razorpay transactions)
   useEffect(() => {
-    if (userData && useruid && budget) {
-      updateUserSpendings();
-    }
-  }, [userData, useruid, budget, total, today, week, month]);
+    const updateData = async () => {
+      if (userData && useruid && budget) {
+        await updateUserSpendings();
+      }
+    };
+    updateData();
+  }, [userData, useruid, budget, combinedSpending.total, combinedSpending.today, combinedSpending.week, combinedSpending.month]);
 
   console.log(budgetObject)
   if (loading) return <SkeletonLayout />;
@@ -455,6 +507,36 @@ const Home = () => {
               )}
             </div>
           </div>
+
+          {/* Recent Razorpay Transactions */}
+          {Array.isArray(userData?.user_transactions) && userData.user_transactions.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium">Recent payments</h2>
+                <a href="/transactions" className="text-gray-400 text-sm hover:text-white transition-colors">
+                  view all
+                </a>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
+                {userData.user_transactions.slice(0, 5).map((transaction, index) => (
+                  <div key={index} className="bg-gray-700 p-4 rounded-lg flex flex-col items-center justify-between min-w-[120px] max-w-[140px]">
+                    <div className="text-xs text-gray-200 mb-1 whitespace-nowrap">Payment</div>
+                    <div className="text-sm font-semibold mb-2 text-blue-400">
+                      ₹{parseFloat(transaction.amount).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-gray-400 mb-2 text-center">
+                      {new Date(transaction.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className={`text-xs px-2 py-1 rounded-full ${
+                      transaction.status === 'captured' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                    }`}>
+                      {transaction.status}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Modal */}
           {modalHtml && (

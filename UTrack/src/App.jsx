@@ -10,6 +10,7 @@ import LandingPage from './pages/LandingPage.jsx';
 import Login from './pages/Login.jsx';
 import SignUp from './pages/SignUp.jsx';
 import SetUp from './pages/SetUp.jsx';
+import TransactionHistory from './pages/TransactionHistory.jsx';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
       <Route path="/scan" element={<Scan />} />
       <Route path="/scan-result" element={<ScanResult />} />
       <Route path="/alerts" element={<Alerts />} />
+      <Route path="/transactions" element={<TransactionHistory />} />
       <Route path="/profile" element={<You />} />
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />

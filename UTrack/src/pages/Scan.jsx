@@ -1,15 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import BottomNav from '../components/BottomNav';
 import './PageStyles.css';
 import CustomSpinner from '../components/CustomSpinner';
 import './ScanPage.css'
 import {auth,db} from '../firebase'
 import { doc, updateDoc,arrayUnion } from "firebase/firestore";
-import { useNavigate} from 'react-router-dom';
 
 const Scan = () => {
   const [capturedImage, setCapturedImage] = useState(null);
-  const [isCapturing, setIsCapturing] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [loading,setLoading]=useState(false);
@@ -17,7 +15,6 @@ const Scan = () => {
   const [imageFile, setImageFile] = useState(null);
   const [jsonData,setJsonData]=useState(null);
   const [isBillSaved,setIisBillSaved]=useState(false);
-  const navigate=useNavigate();
   const uid=auth.currentUser.uid;
  
   // Handle file upload from device storage
@@ -41,7 +38,6 @@ const Scan = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         setCapturedImage(e.target.result);
-        setIsCapturing(false);
       };
       reader.readAsDataURL(file);
     }
@@ -54,14 +50,12 @@ const Scan = () => {
 
   // Trigger camera
   const triggerCamera = () => {
-    setIsCapturing(true);
     cameraInputRef.current?.click();
   };
 
   // Reset to upload screen
   const resetScan = () => {
     setCapturedImage(null);
-    setIsCapturing(false);
     setHtmlTable(null);
     setImageFile(null);
   };

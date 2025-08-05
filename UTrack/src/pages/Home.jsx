@@ -246,30 +246,43 @@ const Home = () => {
   function parseFlexibleDate(dateStr) {
     if (!dateStr) return null;
 
-    // Handle various timestamp formats
+    // Handle various timestamp formats with better error handling
     if (typeof dateStr === 'object' && dateStr instanceof Date) {
-      return dateStr;
+      return isNaN(dateStr.getTime()) ? null : dateStr;
     }
 
     if (typeof dateStr === 'number') {
-      return new Date(dateStr);
+      const date = new Date(dateStr);
+      return isNaN(date.getTime()) ? null : date;
     }
 
     if (typeof dateStr !== 'string') return null;
 
-    // Try ISO format first (most reliable)
-    let parsed = new Date(dateStr);
-    if (!isNaN(parsed.getTime())) return parsed;
-
     // Clean the string
     dateStr = dateStr.trim();
+    if (!dateStr) return null;
+
+    // Try ISO format first (most reliable) - prefer this for consistency
+    if (dateStr.includes('T') || dateStr.includes('Z')) {
+      const isoDate = new Date(dateStr);
+      if (!isNaN(isoDate.getTime())) return isoDate;
+    }
+
+    // Try native Date parsing for common formats
+    let parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      // Validate reasonable dates (not too far in past/future)
+      const now = new Date();
+      const yearDiff = Math.abs(now.getFullYear() - parsed.getFullYear());
+      if (yearDiff <= 10) return parsed; // Allow 10 years range
+    }
 
     // Try common Indian formats: DD/MM/YYYY HH:mm
     const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
     if (ddmmyyyyMatch) {
       const [, dd, mm, yyyy, hh = "00", min = "00", sec = "00"] = ddmmyyyyMatch;
-      // Note: months are 0-indexed in JavaScript Date
-      return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min), parseInt(sec));
+      const date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min), parseInt(sec));
+      return isNaN(date.getTime()) ? null : date;
     }
 
     // Try DD-MM-YYYY HH:mm:ss AM/PM format
@@ -279,27 +292,31 @@ const Home = () => {
       hh = parseInt(hh);
       if (ampm.toUpperCase() === "PM" && hh !== 12) hh += 12;
       if (ampm.toUpperCase() === "AM" && hh === 12) hh = 0;
-      return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), hh, parseInt(min), parseInt(sec));
+      const date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), hh, parseInt(min), parseInt(sec));
+      return isNaN(date.getTime()) ? null : date;
     }
 
-    // Try MM/DD/YYYY format
-    const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (mmddyyyyMatch) {
-      const [, mm, dd, yyyy, hh = "00", min = "00", sec = "00"] = mmddyyyyMatch;
-      // Try both interpretations - prefer DD/MM for Indian context
-      const date1 = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min), parseInt(sec));
-      const date2 = new Date(parseInt(yyyy), parseInt(dd) - 1, parseInt(mm), parseInt(hh), parseInt(min), parseInt(sec));
-      
-      // Return the more recent/reasonable date (basic heuristic)
-      const now = new Date();
-      const diff1 = Math.abs(now.getTime() - date1.getTime());
-      const diff2 = Math.abs(now.getTime() - date2.getTime());
-      return diff1 < diff2 ? date1 : date2;
+    // For ambiguous formats like MM/DD/YYYY, prefer DD/MM for Indian context
+    const slashMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (slashMatch) {
+      const [, first, second, yyyy, hh = "00", min = "00", sec = "00"] = slashMatch;
+      // If day > 12, it's definitely DD/MM format
+      if (parseInt(first) > 12) {
+        const date = new Date(parseInt(yyyy), parseInt(second) - 1, parseInt(first), parseInt(hh), parseInt(min), parseInt(sec));
+        return isNaN(date.getTime()) ? null : date;
+      }
+      // If month > 12, it's definitely MM/DD format  
+      if (parseInt(second) > 12) {
+        const date = new Date(parseInt(yyyy), parseInt(first) - 1, parseInt(second), parseInt(hh), parseInt(min), parseInt(sec));
+        return isNaN(date.getTime()) ? null : date;
+      }
+      // Default to DD/MM for Indian context
+      const date = new Date(parseInt(yyyy), parseInt(second) - 1, parseInt(first), parseInt(hh), parseInt(min), parseInt(sec));
+      return isNaN(date.getTime()) ? null : date;
     }
 
-    // Last resort: try native Date parsing
-    const fallback = new Date(dateStr);
-    return !isNaN(fallback.getTime()) ? fallback : null;
+    console.warn('Unable to parse date:', dateStr);
+    return null;
   }
 
   function calculateSpendingByTime(userbill) {

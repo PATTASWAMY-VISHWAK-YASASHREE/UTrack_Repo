@@ -11,8 +11,6 @@ const Ask = () => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatContainerRef = useRef(null);
-  const [username,setUserName]=useState(null);
-  const [userpresentChat,setUserPresentChat]=useState(null);
   const [isChats, setIsChats] = useState(false);
   const [dbchats, setDbChats] = useState(null);
   const uid=auth.currentUser.uid;
@@ -38,7 +36,7 @@ const Ask = () => {
     
   }
   userChatDb();
-  console.log(username)
+  // console.log(username) // username variable removed
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -69,22 +67,23 @@ const Ask = () => {
     );
   };
 
-  const simulateTyping = (text, callback) => {
-    setIsTyping(true);
-    let index = 0;
-    let displayText = '';
+  // Typing simulation function (currently unused but kept for future use)
+  // const simulateTyping = (text, callback) => {
+  //   setIsTyping(true);
+  //   let index = 0;
+  //   let displayText = '';
     
-    const typeInterval = setInterval(() => {
-      if (index < text.length) {
-        displayText += text[index];
-        callback(displayText);
-        index++;
-      } else {
-        clearInterval(typeInterval);
-        setIsTyping(false);
-      }
-    }, 50);
-  };
+  //   const typeInterval = setInterval(() => {
+  //     if (index < text.length) {
+  //       displayText += text[index];
+  //       callback(displayText);
+  //       index++;
+  //     } else {
+  //       clearInterval(typeInterval);
+  //       setIsTyping(false);
+  //     }
+  //   }, 50);
+  // };
 
   const getData = async (message) => {
     if (!message) return "No message provided";
@@ -107,7 +106,7 @@ const Ask = () => {
         } else {
           return `Server error: ${json.error || "Unknown error"}`;
         }
-      } catch (jsonErr) {
+      } catch (_error) {
         return `Failed to parse JSON: ${text}`;
       }
   

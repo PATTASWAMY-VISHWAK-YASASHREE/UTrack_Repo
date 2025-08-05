@@ -51,9 +51,10 @@ const Signup = () =>{
     
   };
 
-  const handleGoogleSignup = () => {
-    console.log('Google signup clicked');
-  };
+  // Google signup handler (currently unused - implement as needed)
+  // const handleGoogleSignup = () => {
+  //   console.log('Google signup clicked');
+  // };
 
   const handleLogin = () => {
     navigate('/login');

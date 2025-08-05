@@ -239,8 +239,8 @@ function extractUserIdFromDescription(description) {
 
 exports.sendSpendingAlert = functions.firestore
   .document("users/{userId}")
-  .onUpdate(async (change, context) => {
-    const before = change.before.data();
+  .onUpdate(async (change, _context) => {
+    const _before = change.before.data();
     const after = change.after.data();
 
     const spendings = after.userspendings; // Fixed typo: was user_spendings

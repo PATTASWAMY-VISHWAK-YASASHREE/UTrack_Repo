@@ -11,8 +11,6 @@ const SetupGuide = () => {
   const [selectedCurrency, setSelectedCurrency] = useState('INR');
   const [monthlyBudget, setMonthlyBudget] = useState('');
   const [budgetError, setBudgetError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uid, setUid] = useState(null);
 

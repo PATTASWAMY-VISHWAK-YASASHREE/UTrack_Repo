@@ -6,6 +6,34 @@ import BottomNav from '../components/BottomNav';
 import SimpleRazorpayButton from '../components/SimpleRazorpayButton';
 import './PageStyles.css';
 
+// Utility function to parse flexible date formats consistently
+const parseFlexibleDate = (dateStr) => {
+  if (!dateStr) return null;
+  
+  if (typeof dateStr === 'object' && dateStr instanceof Date) {
+    return isNaN(dateStr.getTime()) ? null : dateStr;
+  }
+  
+  if (typeof dateStr === 'number') {
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  }
+  
+  if (typeof dateStr !== 'string') return null;
+  
+  // Try ISO format first
+  if (dateStr.includes('T') || dateStr.includes('Z')) {
+    const isoDate = new Date(dateStr);
+    if (!isNaN(isoDate.getTime())) return isoDate;
+  }
+  
+  // Try native parsing
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) return parsed;
+  
+  return null;
+};
+
 const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,7 +42,6 @@ const TransactionHistory = () => {
   const [userData, setUserData] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all', 'razorpay', 'bills'
   const [paymentAmount, setPaymentAmount] = useState(100); // Default payment amount
-  const [customAmount, setCustomAmount] = useState(''); // For input field
 
   const handlePaymentSuccess = (transaction) => {
     // The transaction will be automatically updated via Firebase listener
@@ -22,22 +49,9 @@ const TransactionHistory = () => {
     // Optional: You can add any additional UI feedback here
   };
 
-  // Handle amount change
-  const handleAmountChange = (e) => {
-    const value = e.target.value;
-    setCustomAmount(value);
-    
-    // Update payment amount if valid
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue) && numValue > 0) {
-      setPaymentAmount(numValue);
-    }
-  };
-
   // Handle predefined amount selection
   const handlePredefinedAmount = (amount) => {
     setPaymentAmount(amount);
-    setCustomAmount(amount.toString());
   };
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -83,7 +97,7 @@ const TransactionHistory = () => {
                   id: bill.json.bill_number || Date.now(),
                   amount: amount,
                   description: `Bill from ${bill.json.merchant_name || 'Unknown'}`,
-                  createdAt: new Date(bill.json.time_stamp || Date.now()),
+                  createdAt: parseFlexibleDate(bill.json.time_stamp) || new Date(),
                   type: 'bill_expense',
                   source: 'bill_scan',
                   displayType: 'Expense',
@@ -125,19 +139,19 @@ const TransactionHistory = () => {
           currency: 'INR',
           status: 'captured',
           method: 'razorpay',
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(), // Use ISO format for consistency
           description: `UTrack Payment - User: ${currentUser.uid}`,
           type: 'razorpay_payment',
-          timestamp: new Date(),
-          processedAt: new Date(),
+          timestamp: new Date().toISOString(), // Use ISO format
+          processedAt: new Date().toISOString(), // Use ISO format
           source: 'frontend_success'
         };
 
         // Update user document immediately
         const userRef = doc(db, 'users', currentUser.uid);
-        const currentTransactions = userdata?.user_transactions || [];
-        const currentSpendings = userdata?.userspendings || {};
-        const budget = userdata?.usersettings?.montly_budget || 0;
+        const currentTransactions = userData?.user_transactions || [];
+        const currentSpendings = userData?.userspendings || {};
+        const budget = userData?.usersettings?.montly_budget || 0;
 
         // Calculate updated spendings
         const newAmount = localTransaction.amount;
@@ -163,7 +177,7 @@ const TransactionHistory = () => {
         await updateDoc(userRef, {
           user_transactions: [...currentTransactions, localTransaction],
           userspendings: updatedSpendings,
-          lastTransactionAt: new Date()
+          lastTransactionAt: new Date().toISOString() // Use ISO format
         });
 
         console.log('✅ Transaction recorded successfully');

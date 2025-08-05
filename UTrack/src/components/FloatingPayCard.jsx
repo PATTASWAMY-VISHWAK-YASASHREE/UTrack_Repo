@@ -199,7 +199,7 @@ const FloatingPayCard = () => {
           prefill: {
             name: currentUser.displayName || 'User',
             email: currentUser.email, // Use currentUser.email
-            contact: userdata?.phoneNumber || ''
+            contact: userData?.phoneNumber || ''
           },
           notes: {
             userId: currentUser.uid,
@@ -268,20 +268,22 @@ const FloatingPayCard = () => {
     const script = document.createElement('script');
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-
-    // Initialize with timeout to ensure proper loading
-    const timer = setTimeout(() => {
-      const paymentScript = loadPaymentButton();
-      form.appendChild(paymentScript);
-    }, 100);
+    script.onload = () => {
+      loadPaymentButton();
+      setPaymentStatus('ready');
+    };
+    script.onerror = () => {
+      console.error('Failed to load Razorpay script');
+      setPaymentStatus('error');
+    };
+    document.head.appendChild(script);
 
     return () => {
-      clearTimeout(timer);
       const containerRef = razorpayContainerRef.current;
       if (containerRef) {
         containerRef.innerHTML = '';
       }
-    }; // eslint-disable-next-line react-hooks/exhaustive-deps
+    };
   }, [isVisible, currentUser, userData, paymentAmount, loadPaymentButton]);
 
   const handleClose = () => {

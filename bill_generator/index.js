@@ -189,9 +189,11 @@ app.post('/process-bill', upload.single('bill_image'), async (req, res) => {
         // The JSON should contain all relevant information from the bill
         // BUT you MUST include these 3 required fields:
         "total_amount": "extracted total amount",
-        "time_stamp": "extracted date and time",
+        "time_stamp": "extracted date and time in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)",
         "payment_method": "extracted payment method"
-        Save every bill with a timestamp in this exact format: "timestamp": "YYYY-MM-DDTHH:MM:SSZ" using UTC time (ISO 8601 standard)
+        
+        // IMPORTANT: Always format timestamps in ISO 8601 standard using UTC time
+        // Example: "2024-01-15T14:30:00Z" or use current time if bill date unclear
         
         // Add any other fields you find relevant (merchant name, items, etc.)
         // Structure the JSON optimally based on the bill content

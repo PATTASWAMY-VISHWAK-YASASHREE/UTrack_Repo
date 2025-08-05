@@ -1,8 +1,7 @@
 // src/components/BottomNav.jsx
 import { Link, useLocation } from "react-router-dom";
-import { FaHome, FaBell, FaUser, FaHistory } from "react-icons/fa";
+import { FaHome, FaUser, FaHistory, FaQrcode } from "react-icons/fa";
 import { MdOutlineStars } from "react-icons/md";
-import { FaQrcode } from "react-icons/fa";
 import "./BottomNav.css";
 
 const BottomNav = () => {
@@ -17,9 +16,9 @@ const BottomNav = () => {
 
   return (
     <nav className="bottom-nav-mobile">
-      {navItems.map((item, index) => (
+      {navItems.map((item) => (
         <Link
-          key={index}
+          key={item.path}
           to={item.path}
           className={`nav-mobile-item${location.pathname === item.path ? " active" : ""}${item.center ? " nav-mobile-center" : ""}`}
         >

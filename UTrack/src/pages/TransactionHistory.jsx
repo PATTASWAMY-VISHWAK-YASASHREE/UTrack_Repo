@@ -3,13 +3,41 @@ import { auth, db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import BottomNav from '../components/BottomNav';
+import SimpleRazorpayButton from '../components/SimpleRazorpayButton';
 import './PageStyles.css';
 
 const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all', 'razorpay', 'bills'
+  const [paymentAmount, setPaymentAmount] = useState(100); // Default payment amount
+  const [customAmount, setCustomAmount] = useState(''); // For input field
+
+  const handlePaymentSuccess = (transaction) => {
+    // The transaction will be automatically updated via Firebase listener
+    console.log('Payment completed successfully:', transaction);
+    // Optional: You can add any additional UI feedback here
+  };
+
+  // Handle amount change
+  const handleAmountChange = (e) => {
+    const value = e.target.value;
+    setCustomAmount(value);
+    
+    // Update payment amount if valid
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue > 0) {
+      setPaymentAmount(numValue);
+    }
+  };
+
+  // Handle predefined amount selection
+  const handlePredefinedAmount = (amount) => {
+    setPaymentAmount(amount);
+    setCustomAmount(amount.toString());
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -20,6 +48,7 @@ const TransactionHistory = () => {
         const unsubscribeDoc = onSnapshot(userRef, (doc) => {
           if (doc.exists()) {
             const userData = doc.data();
+            setUserData(userData); // Store userData for payment button
             
             // Combine different types of transactions
             const allTransactions = [];
@@ -154,6 +183,62 @@ const TransactionHistory = () => {
           </div>
         </div>
 
+        {/* Quick Payment Section */}
+        {currentUser && (
+          <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-lg p-6 mb-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Make a Quick Payment</h3>
+              <p className="text-gray-300 mb-4">Add a new transaction to your history</p>
+              
+              {/* Amount Selection */}
+              <div className="mb-4 max-w-md mx-auto">
+                {/* Predefined amounts */}
+                <div className="flex flex-wrap gap-2 justify-center mb-3">
+                  {[50, 100, 200, 500, 1000].map(amount => (
+                    <button
+                      key={amount}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        paymentAmount === amount
+                          ? 'bg-blue-500 text-white shadow-lg'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      onClick={() => handlePredefinedAmount(amount)}
+                    >
+                      ₹{amount}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Custom amount input */}
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">₹</span>
+                  <input
+                    type="number"
+                    placeholder="Enter custom amount"
+                    value={customAmount}
+                    onChange={handleAmountChange}
+                    min="1"
+                    max="100000"
+                    className="w-full pl-8 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                
+                {/* Current amount display */}
+                <div className="mt-3 p-2 bg-blue-900/50 rounded-lg">
+                  <span className="text-blue-400 font-semibold">Amount: ₹{paymentAmount}</span>
+                </div>
+              </div>
+              
+              <SimpleRazorpayButton 
+                onPaymentSuccess={handlePaymentSuccess}
+                currentUser={currentUser}
+                userData={userData}
+                amount={paymentAmount}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Filter Tabs */}
         <div className="flex space-x-4 mb-6">
           <button
@@ -196,12 +281,45 @@ const TransactionHistory = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 className="text-lg font-semibold mb-2">No transactions found</h3>
-              <p className="text-gray-400">
+              <p className="text-gray-400 mb-6">
                 {filter === 'all' 
                   ? 'Start by making a payment or scanning a bill to see your transaction history.'
                   : `No ${filter} transactions found. Try a different filter.`
                 }
               </p>
+              
+              {/* Payment Button */}
+              {filter === 'all' || filter === 'razorpay' ? (
+                <div className="mt-6">
+                  <p className="text-gray-300 mb-4">Make your first payment:</p>
+                  
+                  {/* Amount Selection for empty state */}
+                  <div className="mb-4 max-w-sm mx-auto">
+                    <div className="flex flex-wrap gap-2 justify-center mb-3">
+                      {[50, 100, 200, 500].map(amount => (
+                        <button
+                          key={amount}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                            paymentAmount === amount
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                          onClick={() => handlePredefinedAmount(amount)}
+                        >
+                          ₹{amount}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <SimpleRazorpayButton 
+                    onPaymentSuccess={handlePaymentSuccess}
+                    currentUser={currentUser}
+                    userData={userData}
+                    amount={paymentAmount}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : (
             filteredTransactions.map((transaction, index) => (

@@ -5,7 +5,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 380px;
+  width: 420px; /* Increased width for amount selection */
   height: auto;
   z-index: 1000;
   transform-style: preserve-3d;
@@ -297,6 +297,118 @@
   .floating-pay-card__main-title h2 {
     font-size: 22px;
   }
+}
+
+/* Amount Selection Styles */
+.amount-selection {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.amount-selection h3 {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.predefined-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+
+.amount-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.amount-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.amount-btn.active {
+  background: #007AFF;
+  border-color: #007AFF;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.custom-amount {
+  margin-bottom: 16px;
+}
+
+.custom-amount label {
+  display: block;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.amount-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-symbol {
+  position: absolute;
+  left: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  z-index: 1;
+}
+
+.amount-input {
+  width: 100%;
+  padding: 12px 12px 12px 28px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.amount-input:focus {
+  outline: none;
+  border-color: #007AFF;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.amount-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.current-amount {
+  text-align: center;
+  padding: 12px;
+  background: rgba(0, 122, 255, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.current-amount strong {
+  color: #007AFF;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 /* Hover effects for better interaction */

@@ -10,8 +10,6 @@ const FloatingPayCard = () => {
   const [paymentStatus, setPaymentStatus] = useState('idle');
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [paymentAmount, setPaymentAmount] = useState(100); // Default amount in rupees
-  const [customAmount, setCustomAmount] = useState(''); // For input field
   const cardRef = useRef(null);
   const razorpayContainerRef = useRef(null);
 
@@ -87,7 +85,7 @@ const FloatingPayCard = () => {
         // Create a local transaction record immediately for instant UI update
         const localTransaction = {
           paymentId: response.razorpay_payment_id,
-          amount: paymentAmount, // Use dynamic payment amount
+          amount: 100, // This should match your actual payment amount
           currency: 'INR',
           status: 'captured',
           method: 'razorpay',
@@ -183,10 +181,10 @@ const FloatingPayCard = () => {
       razorpayButton.onclick = () => {
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Use environment variable
-          amount: paymentAmount * 100, // Convert rupees to paise (dynamic amount)
+          amount: 10000, // Amount in paise (₹100)
           currency: 'INR',
           name: 'UTrack',
-          description: `Payment for UTrack services - ₹${paymentAmount} - User: ${currentUser.uid}`,
+          description: `Payment for UTrack services - User: ${currentUser.uid}`,
           image: '/logo.png', // Your app logo
           handler: handlePaymentSuccess,
           prefill: {
@@ -257,28 +255,10 @@ const FloatingPayCard = () => {
         razorpayContainerRef.current.innerHTML = '';
       }
     };
-  }, [isVisible, currentUser, userData, handlePaymentSuccess, paymentAmount]); // Add paymentAmount to dependencies
+  }, [isVisible, currentUser, userData, handlePaymentSuccess]);
 
   const handleClose = () => {
     setIsVisible(false);
-  };
-
-  // Handle amount change
-  const handleAmountChange = (e) => {
-    const value = e.target.value;
-    setCustomAmount(value);
-    
-    // Update payment amount if valid
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue) && numValue > 0) {
-      setPaymentAmount(numValue);
-    }
-  };
-
-  // Handle predefined amount selection
-  const handlePredefinedAmount = (amount) => {
-    setPaymentAmount(amount);
-    setCustomAmount(amount.toString());
   };
 
   // Get payment status message
@@ -321,49 +301,6 @@ const FloatingPayCard = () => {
         </div>
         
         <div className="floating-pay-card__body">
-          {/* Amount Selection Section */}
-          <div className="amount-selection">
-            <h3>Select Amount</h3>
-            
-            {/* Predefined amounts */}
-            <div className="predefined-amounts">
-              {[50, 100, 200, 500, 1000].map(amount => (
-                <button
-                  key={amount}
-                  type="button"
-                  className={`amount-btn ${paymentAmount === amount ? 'active' : ''}`}
-                  onClick={() => handlePredefinedAmount(amount)}
-                >
-                  ₹{amount}
-                </button>
-              ))}
-            </div>
-            
-            {/* Custom amount input */}
-            <div className="custom-amount">
-              <label htmlFor="customAmount">Or enter custom amount:</label>
-              <div className="amount-input-wrapper">
-                <span className="currency-symbol">₹</span>
-                <input
-                  id="customAmount"
-                  type="number"
-                  placeholder="Enter amount"
-                  value={customAmount}
-                  onChange={handleAmountChange}
-                  min="1"
-                  max="100000"
-                  className="amount-input"
-                />
-              </div>
-            </div>
-            
-            {/* Current amount display */}
-            <div className="current-amount">
-              <strong>Amount to pay: ₹{paymentAmount}</strong>
-            </div>
-          </div>
-          
-          {/* Payment Button */}
           <div ref={razorpayContainerRef} className="floating-pay-card__razorpay"></div>
           
           {currentUser && (

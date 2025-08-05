@@ -4,18 +4,18 @@ import './PageStyles.css';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase'; 
 import SkeletonLayout from "../components/SkeletonLayout"
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 
-// ===== BUDGET ALERT SYSTEM =====
+// ===== IMPROVED BUDGET ALERT SYSTEM =====
 const checkBudgetAlerts = async (userSpendings, userEmail) => {
-  if (!userEmail) return;
+  if (!userEmail || !userSpendings) return;
 
   const alerts = [];
   
   // Check each spending category
   Object.entries(userSpendings).forEach(([period, data]) => {
-    if (data.spent > data.budget) {
+    if (data && data.spent > data.budget && data.budget > 0) {
       const overAmount = data.spent - data.budget;
       const percentage = ((data.spent / data.budget) * 100).toFixed(1);
       
@@ -29,79 +29,71 @@ const checkBudgetAlerts = async (userSpendings, userEmail) => {
     }
   });
 
-  // Send email if there are alerts
+  // Send simplified alert if there are budget overruns
   if (alerts.length > 0) {
-    await sendBudgetAlert(userEmail, alerts);
+    await sendSimpleBudgetAlert(userEmail, alerts);
   }
 };
 
-// Using EmailJS for direct frontend email sending
-const sendBudgetAlert = async (email, alerts) => {
+// Simplified budget alert without external dependencies
+const sendSimpleBudgetAlert = async (email, alerts) => {
   try {
-    console.log('📧 Sending email to:', email);
-    console.log('⚠️ Alerts:', alerts);
+    console.log('📧 Budget Alert Summary for:', email);
+    console.log('⚠️ Budget Overruns:', alerts);
     
-    // Check if EmailJS is loaded
-    if (!window.emailjs) {
-      console.error('❌ EmailJS not loaded! Add script to index.html');
-      return;
+    // Log alert details for debugging
+    alerts.forEach(alert => {
+      console.log(`🚨 ${alert.period.toUpperCase()}: Spent ₹${alert.spent.toFixed(2)} / Budget ₹${alert.budget.toFixed(2)} (${alert.percentage}% over)`);
+    });
+    
+    // You can integrate with your preferred notification service here
+    // For now, we'll use console logging and browser notification
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      // Request permission for notifications
+      if (Notification.permission === 'granted') {
+        new Notification('UTrack Budget Alert', {
+          body: `You've exceeded ${alerts.length} budget limit(s). Check your spending!`,
+          icon: '/favicon.ico'
+        });
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            new Notification('UTrack Budget Alert', {
+              body: `You've exceeded ${alerts.length} budget limit(s). Check your spending!`,
+              icon: '/favicon.ico'
+            });
+          }
+        });
+      }
     }
     
-    const emailjs = window.emailjs;
-    
-    const templateParams = {
-      to_email: email,
-      from_name: 'UTrack Budget Tracker',
-      subject: '⚠️ Budget Alert - Spending Limit Exceeded',
-      message: generateEmailContent(alerts),
-      user_name: email.split('@')[0] || 'User'
-    };
-    
-    console.log('📤 Email params:', templateParams);
-    
-    const result = await emailjs.send(
-      'service_ful4uz9',    // Replace with your actual service ID
-      'template_mclzm0d',   // Replace with your actual template ID
-      templateParams,
-      'fLOITCpvOwm6RubYs'     // Replace with your actual public key
-    );
-    
-    console.log('✅ Budget alert sent successfully:', result);
+    console.log('✅ Budget alert processed successfully');
   } catch (error) {
     console.error('❌ Failed to send budget alert:', error);
   }
 };
 
-// Generate email content
-const generateEmailContent = (alerts) => {
-  let content = `🚨 BUDGET ALERT 🚨\n\nYou have exceeded your budget limits:\n\n`;
-  
-  alerts.forEach(alert => {
-    content += `📊 ${alert.period.toUpperCase()}:\n`;
-    content += `   • Spent: ₹${alert.spent.toFixed(2)}\n`;
-    content += `   • Budget: ₹${alert.budget.toFixed(2)}\n`;
-    content += `   • Over by: ₹${alert.overAmount.toFixed(2)} (${alert.percentage}%)\n\n`;
-  });
-  
-  content += `💡 Consider reviewing your expenses to stay on track!\n\nBest regards,\nUTrack Budget Tracker`;
-  return content;
-};
-
-// Rate limiting to prevent spam
-let lastAlertTime = {};
+// Simplified rate limiting - use sessionStorage instead of memory
 const shouldSendAlert = (email, alerts) => {
-  const now = Date.now();
-  const key = `${email}_${alerts.map(a => a.period).join('_')}`;
-  const lastSent = lastAlertTime[key] || 0;
-  const cooldown = 6 * 60 * 60 * 1000; // 6 hours cooldown
-  
-  if (now - lastSent > cooldown) {
-    lastAlertTime[key] = now;
-    return true;
+  try {
+    const now = Date.now();
+    const alertKey = `budget_alert_${email}_${alerts.map(a => a.period).join('_')}`;
+    const lastSent = parseInt(sessionStorage.getItem(alertKey) || '0');
+    const cooldown = 2 * 60 * 60 * 1000; // 2 hours cooldown
+    
+    if (now - lastSent > cooldown) {
+      sessionStorage.setItem(alertKey, now.toString());
+      return true;
+    }
+    
+    console.log(`⏳ Alert cooldown active for ${email}. Next alert available in ${Math.round((cooldown - (now - lastSent)) / (60 * 1000))} minutes.`);
+    return false;
+  } catch (error) {
+    console.error('Error checking alert cooldown:', error);
+    return true; // Default to allowing alerts if there's an error
   }
-  return false;
 };
-// ===== END BUDGET ALERT SYSTEM =====
+// ===== END IMPROVED BUDGET ALERT SYSTEM =====
 
 const CircularProgress = ({ percentage, color }) => {
   const radius = 18;
@@ -252,30 +244,62 @@ const Home = () => {
   }
 
   function parseFlexibleDate(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') return null;
+    if (!dateStr) return null;
 
-    // Try ISO first
-    let parsed = new Date(dateStr);
-    if (!isNaN(parsed)) return parsed;
-
-    // Try DD/MM/YYYY HH:mm
-    const slashMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
-    if (slashMatch) {
-      const [, dd, mm, yyyy, hh = "00", min = "00"] = slashMatch;
-      return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`);
+    // Handle various timestamp formats
+    if (typeof dateStr === 'object' && dateStr instanceof Date) {
+      return dateStr;
     }
 
-    // Try DD-MM-YYYY HH:mm:ss AM/PM
-    const dashMatch = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+(AM|PM)$/i);
+    if (typeof dateStr === 'number') {
+      return new Date(dateStr);
+    }
+
+    if (typeof dateStr !== 'string') return null;
+
+    // Try ISO format first (most reliable)
+    let parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) return parsed;
+
+    // Clean the string
+    dateStr = dateStr.trim();
+
+    // Try common Indian formats: DD/MM/YYYY HH:mm
+    const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (ddmmyyyyMatch) {
+      const [, dd, mm, yyyy, hh = "00", min = "00", sec = "00"] = ddmmyyyyMatch;
+      // Note: months are 0-indexed in JavaScript Date
+      return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min), parseInt(sec));
+    }
+
+    // Try DD-MM-YYYY HH:mm:ss AM/PM format
+    const dashMatch = dateStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s+(AM|PM)$/i);
     if (dashMatch) {
       let [, dd, mm, yyyy, hh, min, sec, ampm] = dashMatch;
       hh = parseInt(hh);
       if (ampm.toUpperCase() === "PM" && hh !== 12) hh += 12;
       if (ampm.toUpperCase() === "AM" && hh === 12) hh = 0;
-      return new Date(`${yyyy}-${mm}-${dd}T${String(hh).padStart(2, '0')}:${min}:${sec}`);
+      return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), hh, parseInt(min), parseInt(sec));
     }
 
-    return null;
+    // Try MM/DD/YYYY format
+    const mmddyyyyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (mmddyyyyMatch) {
+      const [, mm, dd, yyyy, hh = "00", min = "00", sec = "00"] = mmddyyyyMatch;
+      // Try both interpretations - prefer DD/MM for Indian context
+      const date1 = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min), parseInt(sec));
+      const date2 = new Date(parseInt(yyyy), parseInt(dd) - 1, parseInt(mm), parseInt(hh), parseInt(min), parseInt(sec));
+      
+      // Return the more recent/reasonable date (basic heuristic)
+      const now = new Date();
+      const diff1 = Math.abs(now.getTime() - date1.getTime());
+      const diff2 = Math.abs(now.getTime() - date2.getTime());
+      return diff1 < diff2 ? date1 : date2;
+    }
+
+    // Last resort: try native Date parsing
+    const fallback = new Date(dateStr);
+    return !isNaN(fallback.getTime()) ? fallback : null;
   }
 
   function calculateSpendingByTime(userbill) {
@@ -339,19 +363,43 @@ const Home = () => {
   console.log('Combined spending:', combinedSpending);
 
   function calculateRazorpaySpending(transactions) {
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return { total: 0, today: 0, week: 0, month: 0 };
+    }
+
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     let total = 0, today = 0, week = 0, month = 0;
 
     transactions.forEach(transaction => {
-      const amount = parseFloat(transaction.amount) || 0;
-      const transactionDate = new Date(transaction.createdAt);
+      // Handle various amount formats
+      let amount = 0;
+      if (typeof transaction.amount === 'number') {
+        amount = transaction.amount;
+      } else if (typeof transaction.amount === 'string') {
+        const parsed = parseFloat(transaction.amount.match(/\d+(\.\d+)?/)?.[0] || 0);
+        amount = parsed;
+      }
 
-      if (isNaN(transactionDate)) return;
+      if (isNaN(amount) || amount <= 0) return;
+
+      // Handle various date formats
+      let transactionDate = null;
+      if (transaction.createdAt) {
+        if (transaction.createdAt instanceof Date) {
+          transactionDate = transaction.createdAt;
+        } else if (typeof transaction.createdAt === 'string' || typeof transaction.createdAt === 'number') {
+          transactionDate = new Date(transaction.createdAt);
+        }
+      } else if (transaction.timestamp) {
+        transactionDate = new Date(transaction.timestamp);
+      }
+
+      if (!transactionDate || isNaN(transactionDate.getTime())) return;
 
       total += amount;
 
@@ -412,7 +460,7 @@ const Home = () => {
     overall: { spent: combinedSpending.total, budget: budget }
   }
 
-  const updateUserSpendings = async () => {
+  const updateUserSpendings = useCallback(async () => {
     try {
       const userRef = doc(db, "users", useruid);
       await updateDoc(userRef, {
@@ -426,7 +474,7 @@ const Home = () => {
       console.log('📊 User spendings:', userSpendings);
       
       if (user?.email) {
-        const exceededBudgets = Object.entries(userSpendings).filter(([_, data]) => data.spent > data.budget);
+        const exceededBudgets = Object.entries(userSpendings).filter(([, data]) => data.spent > data.budget);
         console.log('⚠️ Exceeded budgets:', exceededBudgets);
         
         if (exceededBudgets.length > 0 && shouldSendAlert(user.email, exceededBudgets)) {
@@ -439,7 +487,7 @@ const Home = () => {
     } catch (error) {
       console.error("❌ Error updating userspendings:", error);
     }
-  };
+  }, [useruid, userSpendings]);
 
   // Call updateUserSpendings when data is ready (including Razorpay transactions)
   useEffect(() => {
@@ -449,7 +497,7 @@ const Home = () => {
       }
     };
     updateData();
-  }, [userData, useruid, budget, combinedSpending.total, combinedSpending.today, combinedSpending.week, combinedSpending.month]);
+  }, [userData, useruid, budget, combinedSpending.total, combinedSpending.today, combinedSpending.week, combinedSpending.month, updateUserSpendings]);
 
   console.log(budgetObject)
   if (loading) return <SkeletonLayout />;

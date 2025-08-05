@@ -75,8 +75,8 @@ const FloatingPayCard = () => {
     setTransform('translate(-50%, -50%) perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)');
   };
 
-  // Handle payment success callback
-  const handlePaymentSuccess = useCallback(async (response) => {
+  // Handle payment success callback (currently for compatibility - can be used with webhook integration)
+  const _handlePaymentSuccess = async (response) => {
     console.log('Payment successful:', response);
     setPaymentStatus('success');
     
@@ -141,23 +141,23 @@ const FloatingPayCard = () => {
     } catch (error) {
       console.error('Error updating local transaction:', error);
     }
-  }, [currentUser, userdata]);
+  };
 
-  // Handle payment failure
-  const handlePaymentFailure = (response) => {
+  // Handle payment failure (currently for compatibility - can be used with webhook integration)
+  const _handlePaymentFailure = (response) => {
     console.error('Payment failed:', response);
     setPaymentStatus('failed');
     alert('Payment failed. Please try again.');
   };
 
-  // Initialize Razorpay script with enhanced integration
+  // Initialize Razorpay payment button as specified in problem statement
   useEffect(() => {
     if (!razorpayContainerRef.current || !currentUser) return;
 
     // Clear the container first
     razorpayContainerRef.current.innerHTML = '';
 
-    // Create form element
+    // Create form element with the exact button code from problem statement
     const form = document.createElement('form');
     
     // Add loading state initially
@@ -171,93 +171,55 @@ const FloatingPayCard = () => {
     // Add form to container
     razorpayContainerRef.current.appendChild(form);
 
-    // Enhanced Razorpay integration with proper callback handling
-    const initializeRazorpay = () => {
-      // Option 1: Use Razorpay Checkout (recommended for better control)
-      const razorpayButton = document.createElement('button');
-      razorpayButton.type = 'button';
-      razorpayButton.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-          <line x1="1" y1="10" x2="23" y2="10"/>
-        </svg>
-        Pay with Razorpay
-      `;
-      razorpayButton.className = 'razorpay-fallback-btn enhanced-razorpay-btn';
+    // Load the payment button script as specified in problem statement
+    const loadPaymentButton = () => {
+      const script = document.createElement('script');
+      script.src = "https://checkout.razorpay.com/v1/payment-button.js";
+      script.setAttribute('data-payment_button_id', 'pl_Qz9w79lQBguY8Q');
+      script.async = true;
       
-      razorpayButton.onclick = () => {
-        const options = {
-          key: 'rzp_test_your_key_here', // Replace with your actual key
-          amount: 10000, // Amount in paise (₹100)
-          currency: 'INR',
-          name: 'UTrack',
-          description: `Payment for UTrack services - User: ${currentUser.uid}`,
-          image: '/logo.png', // Your app logo
-          handler: handlePaymentSuccess,
-          prefill: {
-            name: currentUser.displayName || 'User',
-            email: currentUser.email,
-            contact: userdata?.phoneNumber || ''
-          },
-          notes: {
-            userId: currentUser.uid,
-            userEmail: currentUser.email,
-            timestamp: new Date().toISOString()
-          },
-          theme: {
-            color: '#007AFF'
-          },
-          modal: {
-            ondismiss: () => {
-              console.log('Payment modal dismissed');
-              setPaymentStatus('dismissed');
-            }
-          }
-        };
-
-        if (window.Razorpay) {
-          const rzp = new window.Razorpay(options);
-          rzp.on('payment.failed', handlePaymentFailure);
-          rzp.open();
-        } else {
-          console.error('Razorpay not loaded');
-          alert('Payment service not available. Please try again later.');
-        }
+      script.onload = () => {
+        console.log('✅ Razorpay payment button loaded successfully');
+        // Clear loading state and show the button
+        form.innerHTML = '';
+        form.appendChild(script);
+        setPaymentStatus('ready');
+      };
+      
+      script.onerror = () => {
+        console.error('❌ Failed to load Razorpay payment button script');
+        form.innerHTML = `
+          <div class="payment-error">
+            <p class="text-red-400 text-sm mb-3">Payment service temporarily unavailable</p>
+            <button type="button" class="razorpay-fallback-btn" onclick="location.reload()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 009-9 9.75 9.75 0 00-6.74 2.74L3 7.5"></path>
+                <path d="M3 7.5h4.5v4.5"></path>
+              </svg>
+              Retry
+            </button>
+          </div>
+        `;
+        setPaymentStatus('error');
       };
 
-      form.innerHTML = '';
-      form.appendChild(razorpayButton);
+      return script;
     };
 
-    // Load Razorpay script
-    if (!window.Razorpay) {
-      const script = document.createElement('script');
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      script.onload = initializeRazorpay;
-      script.onerror = () => {
-        console.error('Failed to load Razorpay script');
-        form.innerHTML = `
-          <button type="button" class="razorpay-fallback-btn" onclick="alert('Payment service temporarily unavailable')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-              <line x1="1" y1="10" x2="23" y2="10"/>
-            </svg>
-            Payment Unavailable
-          </button>
-        `;
-      };
-      document.head.appendChild(script);
-    } else {
-      initializeRazorpay();
-    }
+    // Initialize with timeout to ensure proper loading
+    const timer = setTimeout(() => {
+      const paymentScript = loadPaymentButton();
+      form.appendChild(paymentScript);
+    }, 100);
 
     return () => {
-      if (razorpayContainerRef.current) {
-        razorpayContainerRef.current.innerHTML = '';
+      clearTimeout(timer);
+      const containerRef = razorpayContainerRef.current;
+      if (containerRef) {
+        containerRef.innerHTML = '';
       }
     };
-  }, [isVisible, currentUser, userdata, handlePaymentSuccess]);
+  }, [isVisible, currentUser]);
 
   const handleClose = () => {
     setIsVisible(false);

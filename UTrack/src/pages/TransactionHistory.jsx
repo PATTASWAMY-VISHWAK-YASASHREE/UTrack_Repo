@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import BottomNav from '../components/BottomNav';
 import SimpleRazorpayButton from '../components/SimpleRazorpayButton';
@@ -10,6 +10,7 @@ const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+
   const [userData, setUserData] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all', 'razorpay', 'bills'
   const [paymentAmount, setPaymentAmount] = useState(100); // Default payment amount
@@ -39,6 +40,11 @@ const TransactionHistory = () => {
     setCustomAmount(amount.toString());
   };
 
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [_paymentStatus, setPaymentStatus] = useState('idle');
+  const razorpayContainerRef = useRef(null);
+
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -48,7 +54,7 @@ const TransactionHistory = () => {
         const unsubscribeDoc = onSnapshot(userRef, (doc) => {
           if (doc.exists()) {
             const userData = doc.data();
-            setUserData(userData); // Store userData for payment button
+            setUserData(userData);
             
             // Combine different types of transactions
             const allTransactions = [];
@@ -104,6 +110,153 @@ const TransactionHistory = () => {
 
     return unsubscribe;
   }, []);
+
+  // Handle payment success callback (currently for compatibility - can be used with webhook integration)
+  const _handlePaymentSuccess = async (response) => {
+    console.log('Payment successful:', response);
+    setPaymentStatus('success');
+    
+    try {
+      if (currentUser) {
+        // Create a local transaction record immediately for instant UI update
+        const localTransaction = {
+          paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+          amount: 100, // This should match your actual payment amount
+          currency: 'INR',
+          status: 'captured',
+          method: 'razorpay',
+          createdAt: new Date(),
+          description: `UTrack Payment - User: ${currentUser.uid}`,
+          type: 'razorpay_payment',
+          timestamp: new Date(),
+          processedAt: new Date(),
+          source: 'frontend_success'
+        };
+
+        // Update user document immediately
+        const userRef = doc(db, 'users', currentUser.uid);
+        const currentTransactions = userdata?.user_transactions || [];
+        const currentSpendings = userdata?.userspendings || {};
+        const budget = userdata?.usersettings?.montly_budget || 0;
+
+        // Calculate updated spendings
+        const newAmount = localTransaction.amount;
+        const updatedSpendings = {
+          today: {
+            spent: (currentSpendings.today?.spent || 0) + newAmount,
+            budget: Math.round(budget / 30)
+          },
+          this_week: {
+            spent: (currentSpendings.this_week?.spent || 0) + newAmount,
+            budget: Math.round(budget / 4)
+          },
+          this_month: {
+            spent: (currentSpendings.this_month?.spent || 0) + newAmount,
+            budget: budget
+          },
+          overall: {
+            spent: (currentSpendings.overall?.spent || 0) + newAmount,
+            budget: budget
+          }
+        };
+
+        await updateDoc(userRef, {
+          user_transactions: [...currentTransactions, localTransaction],
+          userspendings: updatedSpendings,
+          lastTransactionAt: new Date()
+        });
+
+        console.log('✅ Transaction recorded successfully');
+        
+        // Show success message and hide payment form
+        setTimeout(() => {
+          alert('Payment successful! Your transaction has been recorded.');
+          setShowPaymentForm(false);
+          setPaymentStatus('idle');
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+    }
+  };
+
+  // Handle payment failure (currently for compatibility - can be used with webhook integration)
+  const _handlePaymentFailure = (response) => {
+    console.error('Payment failed:', response);
+    setPaymentStatus('failed');
+    alert('Payment failed. Please try again.');
+  };
+
+  // Initialize Razorpay payment button
+  useEffect(() => {
+    if (!razorpayContainerRef.current || !showPaymentForm || !currentUser) return;
+
+    // Clear the container first
+    razorpayContainerRef.current.innerHTML = '';
+
+    // Create form element with the exact button code from problem statement
+    const form = document.createElement('form');
+    
+    // Add loading state initially
+    form.innerHTML = `
+      <div class="razorpay-loading">
+        <div class="loading-spinner"></div>
+        <span>Loading payment...</span>
+      </div>
+    `;
+
+    // Add form to container
+    razorpayContainerRef.current.appendChild(form);
+
+    // Load the payment button script as specified in problem statement
+    const loadPaymentButton = () => {
+      const script = document.createElement('script');
+      script.src = "https://checkout.razorpay.com/v1/payment-button.js";
+      script.setAttribute('data-payment_button_id', 'pl_Qz9w79lQBguY8Q');
+      script.async = true;
+      
+      script.onload = () => {
+        console.log('✅ Razorpay payment button loaded successfully');
+        // Clear loading state and show the button
+        form.innerHTML = '';
+        form.appendChild(script);
+        setPaymentStatus('ready');
+      };
+      
+      script.onerror = () => {
+        console.error('❌ Failed to load Razorpay payment button script');
+        form.innerHTML = `
+          <div class="payment-error">
+            <p class="text-red-400 text-sm mb-3">Payment service temporarily unavailable</p>
+            <button type="button" class="razorpay-fallback-btn" onclick="location.reload()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 009-9 9.75 9.75 0 00-6.74 2.74L3 7.5"></path>
+                <path d="M3 7.5h4.5v4.5"></path>
+              </svg>
+              Retry
+            </button>
+          </div>
+        `;
+        setPaymentStatus('error');
+      };
+
+      return script;
+    };
+
+    // Initialize with timeout to ensure proper loading
+    const timer = setTimeout(() => {
+      const paymentScript = loadPaymentButton();
+      form.appendChild(paymentScript);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      const containerRef = razorpayContainerRef.current;
+      if (containerRef) {
+        containerRef.innerHTML = '';
+      }
+    };
+  }, [showPaymentForm, currentUser]);
 
   const filteredTransactions = transactions.filter(transaction => {
     if (filter === 'all') return true;
@@ -179,62 +332,35 @@ const TransactionHistory = () => {
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
               <div className="w-4 h-4 bg-black rounded-full"></div>
             </div>
-            <span className="text-xl text-white font-semibold">Transaction History</span>
+            <span className="text-xl text-white font-semibold">Transactions & Payments</span>
           </div>
+          <button
+            onClick={() => setShowPaymentForm(!showPaymentForm)}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+              <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+            <span>{showPaymentForm ? 'Hide Payment' : 'Make Payment'}</span>
+          </button>
         </div>
 
-        {/* Quick Payment Section */}
-        {currentUser && (
-          <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-lg p-6 mb-6">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold mb-2">Make a Quick Payment</h3>
-              <p className="text-gray-300 mb-4">Add a new transaction to your history</p>
-              
-              {/* Amount Selection */}
-              <div className="mb-4 max-w-md mx-auto">
-                {/* Predefined amounts */}
-                <div className="flex flex-wrap gap-2 justify-center mb-3">
-                  {[50, 100, 200, 500, 1000].map(amount => (
-                    <button
-                      key={amount}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                        paymentAmount === amount
-                          ? 'bg-blue-500 text-white shadow-lg'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                      onClick={() => handlePredefinedAmount(amount)}
-                    >
-                      ₹{amount}
-                    </button>
-                  ))}
-                </div>
-                
-                {/* Custom amount input */}
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">₹</span>
-                  <input
-                    type="number"
-                    placeholder="Enter custom amount"
-                    value={customAmount}
-                    onChange={handleAmountChange}
-                    min="1"
-                    max="100000"
-                    className="w-full pl-8 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                
-                {/* Current amount display */}
-                <div className="mt-3 p-2 bg-blue-900/50 rounded-lg">
-                  <span className="text-blue-400 font-semibold">Amount: ₹{paymentAmount}</span>
-                </div>
+        {/* Payment Form */}
+        {showPaymentForm && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold mb-4">Make a Payment</h3>
+            <div className="bg-gray-700 rounded-lg p-4">
+              <div ref={razorpayContainerRef} className="min-h-[80px] flex items-center justify-center">
+                {/* Razorpay payment button will be loaded here */}
               </div>
-              
-              <SimpleRazorpayButton 
-                onPaymentSuccess={handlePaymentSuccess}
-                currentUser={currentUser}
-                userData={userData}
-                amount={paymentAmount}
-              />
+              {currentUser && (
+                <div className="mt-3 text-center">
+                  <p className="text-sm text-gray-400">
+                    Logged in as: {currentUser.email}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

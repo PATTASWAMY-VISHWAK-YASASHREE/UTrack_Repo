@@ -106,7 +106,7 @@ const Ask = () => {
         } else {
           return `Server error: ${json.error || "Unknown error"}`;
         }
-      } catch (error) {
+      } catch (_error) {
         return `Failed to parse JSON: ${text}`;
       }
   

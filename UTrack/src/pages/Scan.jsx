@@ -8,7 +8,6 @@ import { doc, updateDoc,arrayUnion } from "firebase/firestore";
 
 const Scan = () => {
   const [capturedImage, setCapturedImage] = useState(null);
-  const [isCapturing, setIsCapturing] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [loading,setLoading]=useState(false);
@@ -39,7 +38,6 @@ const Scan = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         setCapturedImage(e.target.result);
-        setIsCapturing(false);
       };
       reader.readAsDataURL(file);
     }
@@ -52,14 +50,12 @@ const Scan = () => {
 
   // Trigger camera
   const triggerCamera = () => {
-    setIsCapturing(true);
     cameraInputRef.current?.click();
   };
 
   // Reset to upload screen
   const resetScan = () => {
     setCapturedImage(null);
-    setIsCapturing(false);
     setHtmlTable(null);
     setImageFile(null);
   };

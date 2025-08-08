@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const LogoutButton = ({ onLogout, label = "Logout", className = "" }) => {
-  const navigate=useNavigate()  
+  const navigate = useNavigate();  
   const handleClick = async () => {
     try {
       await onLogout();

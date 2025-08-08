@@ -106,7 +106,8 @@ const Ask = () => {
         } else {
           return `Server error: ${json.error || "Unknown error"}`;
         }
-      } catch (_error) {
+      } catch (parseError) {
+        console.warn('Failed to parse response as JSON:', parseError);
         return `Failed to parse JSON: ${text}`;
       }
   

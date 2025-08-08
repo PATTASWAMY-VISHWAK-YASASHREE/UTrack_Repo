@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import './PageStyles.css';
 import CustomSpinner from '../components/CustomSpinner';
-import './ScanPage.css'
-import {auth,db} from '../firebase'
-import { doc, updateDoc,arrayUnion } from "firebase/firestore";
+import './ScanPage.css';
+import { auth, db } from '../firebase';
+import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { onAuthStateChanged } from 'firebase/auth';
 
 const Scan = () => {
   const [capturedImage, setCapturedImage] = useState(null);
@@ -13,9 +14,22 @@ const Scan = () => {
   const [loading,setLoading]=useState(false);
   const [htmlTable, setHtmlTable] = useState(null);
   const [imageFile, setImageFile] = useState(null);
-  const [jsonData,setJsonData]=useState(null);
-  const [isBillSaved,setIisBillSaved]=useState(false);
-  const uid=auth.currentUser.uid;
+  const [jsonData, setJsonData] = useState(null);
+  const [isBillSaved, setIsBillSaved] = useState(false);
+  const [uid, setUid] = useState(null);
+
+  // Safe way to get current user uid
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUid(user.uid);
+      } else {
+        setUid(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
  
   // Handle file upload from device storage
   const handleFileUpload = (event) => {
@@ -91,25 +105,30 @@ const Scan = () => {
       console.error('Error:', error);
     }
   };
-  const saveBill=async ()=>{
-    
-    try{
-      const userRef=doc(db,"users",uid)
-      setLoading(true);
-      await updateDoc(userRef,{
-        user_bills:arrayUnion({json:jsonData,html:htmlTable})
-      })
-      console.log("clicked")
-      setLoading(false)
-      setIisBillSaved(true)
-    }catch(error){
-      console.log("error in updating db",error)
-      setLoading(false)
+  const saveBill = async () => {
+    if (!uid) {
+      alert('User not authenticated. Please log in first.');
+      return;
     }
-  }
-  const handleBack=()=>{
-    setCapturedImage(false)
-  }
+    
+    try {
+      const userRef = doc(db, "users", uid);
+      setLoading(true);
+      await updateDoc(userRef, {
+        user_bills: arrayUnion({json: jsonData, html: htmlTable})
+      });
+      console.log("Bill saved successfully");
+      setLoading(false);
+      setIsBillSaved(true);
+    } catch (error) {
+      console.log("Error in updating db", error);
+      setLoading(false);
+      alert('Failed to save bill. Please try again.');
+    }
+  };
+  const handleBack = () => {
+    setCapturedImage(false);
+  };
   return (
     <div className="page scan-page">
       {!capturedImage ? (

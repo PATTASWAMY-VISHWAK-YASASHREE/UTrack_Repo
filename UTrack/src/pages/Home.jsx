@@ -4,7 +4,7 @@ import './PageStyles.css';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase'; 
 import SkeletonLayout from "../components/SkeletonLayout"
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 
 // ===== IMPROVED BUDGET ALERT SYSTEM =====
@@ -470,12 +470,12 @@ const Home = () => {
     overall: { spent: combinedSpending.total, budget: budget, percentage: Math.round((combinedSpending.total / budget) * 100) }
   };
 
-  const userSpendings = {
+  const userSpendings = useMemo(() => ({
     today: { spent: combinedSpending.today, budget: Math.round(budget / 30) },
     this_week: { spent: combinedSpending.week, budget: Math.round(budget / 4) },
     this_month: { spent: combinedSpending.month, budget: budget },
     overall: { spent: combinedSpending.total, budget: budget }
-  }
+  }), [combinedSpending.today, combinedSpending.week, combinedSpending.month, combinedSpending.total, budget]);
 
   const updateUserSpendings = useCallback(async () => {
     try {

@@ -188,8 +188,15 @@ const FloatingPayCard = () => {
       razorpayButton.className = 'razorpay-fallback-btn enhanced-razorpay-btn';
       
       razorpayButton.onclick = () => {
+        const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+        if (!razorpayKey) {
+          console.error('Razorpay key not configured');
+          alert('Payment service not configured. Please contact support.');
+          return;
+        }
+        
         const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Use environment variable
+          key: razorpayKey,
           amount: paymentAmount * 100, // Convert rupees to paise (dynamic amount)
           currency: 'INR',
           name: 'UTrack',
@@ -279,6 +286,7 @@ const FloatingPayCard = () => {
     document.head.appendChild(script);
 
     return () => {
+      // Store reference to avoid stale closure
       const containerRef = razorpayContainerRef.current;
       if (containerRef) {
         containerRef.innerHTML = '';
